@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30114.105
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImmutableArrayAnalyzer", "ImmutableArrayAnalyzer\ImmutableArrayAnalyzer.csproj", "{87604EB8-DF87-4065-BC78-F8274F5E4972}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{87604EB8-DF87-4065-BC78-F8274F5E4972}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87604EB8-DF87-4065-BC78-F8274F5E4972}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87604EB8-DF87-4065-BC78-F8274F5E4972}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87604EB8-DF87-4065-BC78-F8274F5E4972}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {078E095F-BED0-4DD5-9387-D74C62C59105}
+	EndGlobalSection
+EndGlobal
