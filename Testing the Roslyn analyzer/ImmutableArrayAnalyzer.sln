@@ -5,6 +5,10 @@ VisualStudioVersion = 16.0.30114.105
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImmutableArrayAnalyzer", "ImmutableArrayAnalyzer\ImmutableArrayAnalyzer.csproj", "{87604EB8-DF87-4065-BC78-F8274F5E4972}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AnalyzerProject", "AnalyzerProject\AnalyzerProject.csproj", "{7970B698-8708-408A-A985-0F21DE3BF3E1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestProject", "TestProject\TestProject.csproj", "{B49DD3D2-CC0E-4624-9AA9-35E6F0D1A459}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,14 @@ Global
 		{87604EB8-DF87-4065-BC78-F8274F5E4972}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{87604EB8-DF87-4065-BC78-F8274F5E4972}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{87604EB8-DF87-4065-BC78-F8274F5E4972}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7970B698-8708-408A-A985-0F21DE3BF3E1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7970B698-8708-408A-A985-0F21DE3BF3E1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7970B698-8708-408A-A985-0F21DE3BF3E1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7970B698-8708-408A-A985-0F21DE3BF3E1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B49DD3D2-CC0E-4624-9AA9-35E6F0D1A459}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B49DD3D2-CC0E-4624-9AA9-35E6F0D1A459}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B49DD3D2-CC0E-4624-9AA9-35E6F0D1A459}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B49DD3D2-CC0E-4624-9AA9-35E6F0D1A459}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

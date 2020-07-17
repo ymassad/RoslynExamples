@@ -9,7 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ImmutableArrayAnalyzer
+namespace AnalyzerProject
 {
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public class CreationAnalyzer : DiagnosticAnalyzer
