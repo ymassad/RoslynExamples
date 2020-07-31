@@ -26,7 +26,9 @@ namespace AnalyzerProject
         public override ImmutableArray<DiagnosticDescriptor>
             SupportedDiagnostics => ImmutableArray.Create(DiagnosticDescriptor);
 
+        //using im = System.Collections.Immutable;
         //ImmutableArray<int>.Empty.Add(1);
+        //im.ImmutableArray<int>.Empty.Add(1);
 
         public override void Initialize(AnalysisContext context)
         {
@@ -55,19 +57,36 @@ namespace AnalyzerProject
             if (emptyAccess.Name.Identifier.Text != "Empty")
                 return;
 
-            if (!(emptyAccess.Expression is GenericNameSyntax immutableArray))
+            if (!(context.SemanticModel.GetSymbolInfo(emptyAccess.Expression).Symbol
+                is INamedTypeSymbol imSymbol))
                 return;
 
-            if (immutableArray.TypeArgumentList.Arguments.Count != 1)
+            if (imSymbol.Name != "ImmutableArray")
                 return;
 
-            if (immutableArray.Identifier.Text != "ImmutableArray")
+            if (imSymbol.TypeArguments.Length != 1)
+                return;
+
+            var fullnameOfNamespace = GetFullname(imSymbol.ContainingNamespace);
+
+            if (fullnameOfNamespace != "System.Collections.Immutable")
                 return;
 
             context.ReportDiagnostic(
                 Diagnostic.Create(
                     DiagnosticDescriptor,
                     node.GetLocation()));
+        }
+
+        private static string GetFullname(INamespaceSymbol ns)
+        {
+            if (ns.IsGlobalNamespace)
+                return "";
+
+            if (ns.ContainingNamespace.IsGlobalNamespace)
+                return ns.Name;
+
+            return GetFullname(ns.ContainingNamespace) + "." + ns.Name;
         }
     }
 }

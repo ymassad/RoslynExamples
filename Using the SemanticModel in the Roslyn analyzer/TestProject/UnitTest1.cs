@@ -83,6 +83,35 @@ public static class Program
             Assert.AreEqual(5, lineSpan.StartLinePosition.Line);
         }
 
+        [TestMethod]
+        public async Task CreatingAnImmutableArrayViaTheEmptyPropertyUsingTheAliasDirectiveFeatureToCreateAnAliasForImmutableArrayOfIntGeneratesOneDiagnostic()
+        {
+            var code = @"
+using imOfInt = System.Collections.Immutable.ImmutableArray<int>;
+
+public static class Program
+{
+    public static void Main()
+    {
+        var array = imOfInt.Empty.Add(1);
+    }
+}";
+            ImmutableArray<Diagnostic> diagnostics = await GetDiagnostics(code);
+
+            Assert.AreEqual(1, diagnostics.Length);
+
+            var diagnostic = diagnostics[0];
+
+            Assert.AreEqual(diagnostic.Id, "BadWayOfCreatingImmutableArray");
+
+            var location = diagnostic.Location;
+
+            var lineSpan = location.GetLineSpan();
+
+            Assert.AreEqual(7, lineSpan.StartLinePosition.Line);
+        }
+
+
         private static async Task<ImmutableArray<Diagnostic>> GetDiagnostics(string code)
         {
             AdhocWorkspace workspace = new AdhocWorkspace();
