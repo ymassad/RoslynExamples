@@ -13,6 +13,7 @@
     </Dependencies>
     <Assets>
         <Asset Type="Microsoft.VisualStudio.Analyzer" d:Source="Project" d:ProjectName="AnalyzerProject" Path="|AnalyzerProject|" />
+        <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="AnalyzerProject" Path="|AnalyzerProject|" />
     </Assets>
     <Prerequisites>
         <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[16.0,17.0)" DisplayName="Visual Studio core editor" />
