@@ -36,7 +36,66 @@ public static class Program
         var array = System.Collections.Immutable.ImmutableArray.Create(1);
     }
 }";
+            await RunTest(code, expectedChangedCode);
+        }
 
+        [TestMethod]
+        public async Task CreatingAnImmutableArrayViaTheEmptyPropertyWithoutUsingFullNameOfImmutableArrayType_CodeFixMakesTheCodeUseTheCreateMethod()
+        {
+            var code = @"
+using System.Collections.Immutable;
+
+public static class Program
+{
+    public static void Main()
+    {
+        var array = ImmutableArray<int>.Empty.Add(1);
+    }
+}";
+
+            var expectedChangedCode = @"
+using System.Collections.Immutable;
+
+public static class Program
+{
+    public static void Main()
+    {
+        var array = ImmutableArray.Create(1);
+    }
+}";
+            await RunTest(code, expectedChangedCode);
+        }
+
+        [TestMethod]
+        public async Task CreatingAnImmutableArrayViaTheEmptyProperty_ArrayTypeIsLongButValueTypeIsInt_CodeFixMakesTheCodeUseTheCreateMethod_CorrectArrayTypeIsCreated()
+        {
+            var code = @"
+using System.Collections.Immutable;
+
+public static class Program
+{
+    public static void Main()
+    {
+        var array = ImmutableArray<long>.Empty.Add(1);
+    }
+}";
+
+            var expectedChangedCode = @"
+using System.Collections.Immutable;
+
+public static class Program
+{
+    public static void Main()
+    {
+        var array = ImmutableArray.Create<long>(1);
+    }
+}";
+            await RunTest(code, expectedChangedCode);
+        }
+
+
+        private static async Task RunTest(string code, string expectedChangedCode)
+        {
             var (diagnostics, document, workspace) = await Utilities.GetDiagnosticsAdvanced(code);
 
             Assert.AreEqual(1, diagnostics.Length);
@@ -63,7 +122,7 @@ public static class Program
 
             var operations = await registeredCodeAction.GetOperationsAsync(CancellationToken.None);
 
-            foreach(var operation in operations)
+            foreach (var operation in operations)
             {
                 operation.Apply(workspace, CancellationToken.None);
             }
@@ -75,6 +134,5 @@ public static class Program
 
             Assert.AreEqual(expectedChangedCode, newCode);
         }
-
     }
 }

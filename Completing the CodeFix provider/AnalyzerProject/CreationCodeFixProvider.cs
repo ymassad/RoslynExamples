@@ -10,6 +10,7 @@ using System.Composition;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Editing;
 
 namespace AnalyzerProject
 {
@@ -21,6 +22,8 @@ namespace AnalyzerProject
             ImmutableArray.Create("BadWayOfCreatingImmutableArray");
 
         //System.Collections.Immutable.ImmutableArray<int>.Empty.Add(1);
+
+        //ImmutableArray<int>.Empty.Add(1);
         //System.Collections.Immutable.ImmutableArray.Create(1);
 
         public override async Task RegisterCodeFixesAsync(CodeFixContext context)
@@ -36,10 +39,48 @@ namespace AnalyzerProject
             if (!(node is InvocationExpressionSyntax addInvocation))
                 throw new Exception("Expected node to be of type InvocationExpressionSyntax");
 
+            if(!(addInvocation.Expression is MemberAccessExpressionSyntax addMemberAccess))
+                throw new Exception("Expected addInvocation.Expression to be of type MemberAccessExpressionSyntax");
+
+            if(!(addMemberAccess.Expression is MemberAccessExpressionSyntax emptyMemberAccess))
+                throw new Exception("Expected addMemberAccess.Expression to be of type MemberAccessExpressionSyntax");
+
             context.RegisterCodeFix(CodeAction.Create("Use ImmutableArray.Create", async c =>
             {
+                var noNeedToUseFullnamespace =
+                    emptyMemberAccess.Expression is GenericNameSyntax;
+
+                var argument = addInvocation.ArgumentList.Arguments.Single();
+
+                var semanticModel = await document.GetSemanticModelAsync();
+
+                var argumentTypeInfo = semanticModel.GetTypeInfo(argument.Expression);
+
+                var argumentTypeWasConverted =
+                    !SymbolEqualityComparer.Default
+                        .Equals(argumentTypeInfo.Type, argumentTypeInfo.ConvertedType);
+
                 var createMethodAccessExpr = CreateMemberAccessExpression(
-                    "System.Collections.Immutable.ImmutableArray.Create");
+                    noNeedToUseFullnamespace
+                        ? "ImmutableArray.Create"
+                        : "System.Collections.Immutable.ImmutableArray.Create");
+
+                if (argumentTypeWasConverted)
+                {
+                    var syntaxGenerator = SyntaxGenerator.GetGenerator(document);
+
+                    TypeSyntax elementTypeSyntax = (TypeSyntax)syntaxGenerator.TypeExpression(
+                        argumentTypeInfo.ConvertedType);
+
+                    createMethodAccessExpr =
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            createMethodAccessExpr.Expression,
+                            SyntaxFactory.GenericName(
+                                SyntaxFactory.Identifier("Create"),
+                                SyntaxFactory.TypeArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(elementTypeSyntax))));
+                }
 
                 var updatedRoot = root.ReplaceNode(addInvocation.Expression, createMethodAccessExpr);
 
