@@ -20,7 +20,7 @@ namespace AnalyzerProject
                 "Bad way of creating immutable array",
                 "Bad way of creating immutable array",
                 "Immutable arrays",
-                DiagnosticSeverity.Warning,
+                DiagnosticSeverity.Error,
                 isEnabledByDefault: true);
 
         public override ImmutableArray<DiagnosticDescriptor>
