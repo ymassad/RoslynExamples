@@ -4,6 +4,8 @@ using Microsoft.CodeAnalysis.CodeRefactorings;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Editing;
+using Microsoft.CodeAnalysis.FindSymbols;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
 using System.Linq;
@@ -54,30 +56,16 @@ namespace CreateCustomDelegateCodeRefactoring
             IParameterSymbol parameterSymbol,
             SemanticModel semanticModel)
         {
-            var syntaxGenerator = SyntaxGenerator.GetGenerator(document);
+            CreateDelegateDeclaration(
+                document,
+                funcOrAction,
+                parameterSymbol,
+                out var newDelegateName,
+                out var delegateDeclaration);
 
-            var parameters = funcOrAction switch
-            {
-                FuncOrAction.Action action => action.Parameters,
-                FuncOrAction.Func func => func.Parameters,
-                _ => throw new System.NotImplementedException()
-            };
-
-            var newDelegateName = MakeFirstLetterUpperCase(parameterSymbol.Name);
-
-            var delegateDeclaration = (DelegateDeclarationSyntax)syntaxGenerator.DelegateDeclaration(
-                newDelegateName,
-                parameters
-                    .Select(p => syntaxGenerator.ParameterDeclaration(
-                        p.Name,
-                        syntaxGenerator.TypeExpression(p.Type))),
-                accessibility: Accessibility.Public);
-
-            if(funcOrAction is FuncOrAction.Func func1)
-            {
-                delegateDeclaration = delegateDeclaration
-                    .WithReturnType((TypeSyntax) syntaxGenerator.TypeExpression(func1.ReturnType));
-            }
+            var parametersThatAreSourcesOfParameter = FindSourceParameters(
+                parameterSymbol,
+                document.Project.Solution);
 
             var method = (MethodDeclarationSyntax)parameterSyntax.Parent.Parent;
 
@@ -86,18 +74,18 @@ namespace CreateCustomDelegateCodeRefactoring
 
             var root = await document.GetSyntaxRootAsync();
 
-            var containingType = (TypeDeclarationSyntax) method.Parent;
+            var containingType = (TypeDeclarationSyntax)method.Parent;
 
             var indexOfMethodWithinSiblingMembers = containingType.Members.IndexOf(method);
 
-            var updatedRoot = root.ReplaceNodes(new SyntaxNode[] { method, containingType},
-                (originalNode, possiblyChangedNode) => 
+            var updatedRoot = root.ReplaceNodes(new SyntaxNode[] { method, containingType },
+                (originalNode, possiblyChangedNode) =>
                 {
                     if (originalNode == method)
                     {
                         return updatedMethod;
                     }
-                    else if(originalNode == containingType)
+                    else if (originalNode == containingType)
                     {
                         var possibleChangedContainingType = (TypeDeclarationSyntax)possiblyChangedNode;
 
@@ -112,6 +100,76 @@ namespace CreateCustomDelegateCodeRefactoring
                 });
 
             return document.WithSyntaxRoot(updatedRoot);
+        }
+
+        private async Task<ImmutableArray<(IParameterSymbol parameter, Document document)>> FindSourceParameters(
+            IParameterSymbol parameterSymbol, Solution solution)
+        {
+            var containingMethod = (IMethodSymbol) parameterSymbol.ContainingSymbol;
+
+            var referencesToMethod = await SymbolFinder.FindCallersAsync(containingMethod, solution);
+
+            var invocations = referencesToMethod
+                .SelectMany(x => x.Locations)
+                .Select(x =>
+                {
+                    var document = solution.GetDocument(x.SourceTree);
+
+                    var root = x.SourceTree.GetRoot();
+
+                    var node = root.FindNode(x.SourceSpan);
+
+                    if(node is InvocationExpressionSyntax invocation)
+                    {
+                        return (invocation, document);
+                    }
+
+                    return default;
+                })
+                .Where(x => x.invocation != null)
+                .ToImmutableArray();
+
+            var result = new List<(IParameterSymbol parameter, Document document)>();
+
+            foreach(var invocationAndDocument in invocations)
+            {
+                var argument = invocationAndDocument.invocation.ArgumentList.Arguments[parameterSymbol.Ordinal];
+
+                var semanticModel = await invocationAndDocument.document.GetSemanticModelAsync();
+
+                if(semanticModel.GetSymbolInfo(argument).Symbol is IParameterSymbol parameter)
+                {
+                    result.Add((parameter, invocationAndDocument.document));
+                }
+            }
+
+            return result.ToImmutableArray();
+        }
+
+        private void CreateDelegateDeclaration(Document document, FuncOrAction funcOrAction, IParameterSymbol parameterSymbol, out string newDelegateName, out DelegateDeclarationSyntax delegateDeclaration)
+        {
+            var syntaxGenerator = SyntaxGenerator.GetGenerator(document);
+
+            var parameters = funcOrAction switch
+            {
+                FuncOrAction.Action action => action.Parameters,
+                FuncOrAction.Func func => func.Parameters,
+                _ => throw new System.NotImplementedException()
+            };
+
+            newDelegateName = MakeFirstLetterUpperCase(parameterSymbol.Name);
+            delegateDeclaration = (DelegateDeclarationSyntax)syntaxGenerator.DelegateDeclaration(
+                newDelegateName,
+                parameters
+                    .Select(p => syntaxGenerator.ParameterDeclaration(
+                        p.Name,
+                        syntaxGenerator.TypeExpression(p.Type))),
+                accessibility: Accessibility.Public);
+            if (funcOrAction is FuncOrAction.Func func1)
+            {
+                delegateDeclaration = delegateDeclaration
+                    .WithReturnType((TypeSyntax)syntaxGenerator.TypeExpression(func1.ReturnType));
+            }
         }
 
         private string MakeFirstLetterUpperCase(string name)
