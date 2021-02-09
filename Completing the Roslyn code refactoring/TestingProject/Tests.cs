@@ -103,6 +103,74 @@ public static class CallerClass1
             Assert.AreEqual(expectedCallerCode, actualUpdatedCallerDocumentText);
         }
 
+        [TestMethod]
+        public async Task TestThatWeHandleACallerInAnotherDocumentAndACallerInTheSameDocument()
+        {
+            var code = @"
+using System;
+
+public static class Class1
+{
+    public static void Method1(Action<string /*firstName*/> write)
+    {
+        write(""Adam"");
+    }
+
+    public static void CallerInMyDocument(Action<string /*firstName*/> write)
+    {
+        Method1(write);
+    }
+}";
+
+            var callerCode = @"
+using System;
+
+public static class CallerClass1
+{
+    public static void Method2(Action<string /*firstName*/> write)
+    {
+        Class1.Method1(write);
+    }
+}
+";
+
+            var expectedUpdatedCode = @"
+using System;
+
+public static class Class1
+{
+    public delegate void Write(string firstName);
+
+    public static void Method1(Write write)
+    {
+        write(""Adam"");
+    }
+
+    public static void CallerInMyDocument(Write write)
+    {
+        Method1(write);
+    }
+}";
+
+            var expectedCallerCode = @"
+using System;
+
+public static class CallerClass1
+{
+    public static void Method2(Class1.Write write)
+    {
+        Class1.Method1(write);
+    }
+}
+";
+
+            var (actualUpdatedText, actualUpdatedCallerDocumentText) = await ApplyCodeRefactoring(code, callerCode);
+
+            Assert.AreEqual(expectedUpdatedCode, actualUpdatedText);
+            Assert.AreEqual(expectedCallerCode, actualUpdatedCallerDocumentText);
+        }
+
+
         private static async Task<string> ApplyCodeRefactoring(
             string code)
         {
@@ -148,7 +216,7 @@ public static class CallerClass1
 
             var root = await document.GetSyntaxRootAsync();
 
-            var parameter = root.DescendantNodes().OfType<ParameterSyntax>().Single();
+            var parameter = root.DescendantNodes().OfType<ParameterSyntax>().First();
 
             var registeredCodeActions = new List<CodeAction>();
 

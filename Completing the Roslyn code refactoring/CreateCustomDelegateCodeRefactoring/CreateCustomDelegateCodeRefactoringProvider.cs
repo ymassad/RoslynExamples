@@ -40,7 +40,7 @@ namespace CreateCustomDelegateCodeRefactoring
             context.RegisterRefactoring(CodeAction.Create(
                 "Create Custom Delegate", async c =>
                 {
-                    return await UpdateDocumentToAddAndUseANewDelegate(
+                    return await UpdateSolutionToAddAndUseANewDelegate(
                         context.Document,
                         funcOrAction,
                         parameterSyntax,
@@ -49,7 +49,7 @@ namespace CreateCustomDelegateCodeRefactoring
                 }));
         }
 
-        private async Task<Document> UpdateDocumentToAddAndUseANewDelegate(
+        private async Task<Solution> UpdateSolutionToAddAndUseANewDelegate(
             Document document,
             FuncOrAction funcOrAction,
             ParameterSyntax parameterSyntax,
@@ -63,20 +63,31 @@ namespace CreateCustomDelegateCodeRefactoring
                 out var newDelegateName,
                 out var delegateDeclaration);
 
-            var parametersThatAreSourcesOfParameter = FindSourceParameters(
-                parameterSymbol,
-                document.Project.Solution);
-
             var method = (MethodDeclarationSyntax)parameterSyntax.Parent.Parent;
 
-            var updatedMethod = method.ReplaceNode(parameterSyntax.Type,
-                SyntaxFactory.IdentifierName(newDelegateName));
+            var annotationForParameter = new SyntaxAnnotation();
+
+            var updatedMethod = method.ReplaceNode(parameterSyntax,
+                parameterSyntax
+                    .WithType(
+                        SyntaxFactory.IdentifierName(newDelegateName))
+                    .WithAdditionalAnnotations(annotationForParameter));
 
             var root = await document.GetSyntaxRootAsync();
 
             var containingType = (TypeDeclarationSyntax)method.Parent;
 
+            var containingTypeSymbol = semanticModel.GetDeclaredSymbol(containingType);
+
+            var syntaxGenerator = SyntaxGenerator.GetGenerator(document);
+
+            var qualifiedDelegateType = SyntaxFactory.QualifiedName(
+                (NameSyntax)syntaxGenerator.TypeExpression(containingTypeSymbol),
+                SyntaxFactory.IdentifierName(newDelegateName));
+
             var indexOfMethodWithinSiblingMembers = containingType.Members.IndexOf(method);
+
+            var solution = document.Project.Solution;
 
             var updatedRoot = root.ReplaceNodes(new SyntaxNode[] { method, containingType },
                 (originalNode, possiblyChangedNode) =>
@@ -99,13 +110,52 @@ namespace CreateCustomDelegateCodeRefactoring
                     throw new System.Exception("Unexpected: originalNode is not any of the nodes passed to ReplaceNodes");
                 });
 
-            return document.WithSyntaxRoot(updatedRoot);
+            solution = solution.WithDocumentSyntaxRoot(document.Id, updatedRoot);
+
+            var newDocument = solution.GetDocument(document.Id);
+
+            var newSemanticModel = await newDocument.GetSemanticModelAsync();
+
+            var newDocumentRootNode = await newDocument.GetSyntaxRootAsync();
+
+            var newParameterSyntax =
+                (ParameterSyntax) newDocumentRootNode.GetAnnotatedNodes(annotationForParameter).Single();
+
+            var newParameterSymbol = newSemanticModel.GetDeclaredSymbol(newParameterSyntax);
+
+            var parametersThatAreSourcesOfParameter = await FindSourceParameters(
+                newParameterSymbol,
+                solution);
+
+            foreach (var callerParameterAndDocument in parametersThatAreSourcesOfParameter)
+            {
+                var callerDocument = callerParameterAndDocument.document;
+
+                var callerDocumentRoot = await callerDocument.GetSyntaxRootAsync();
+
+                var callerParameterSyntax = (ParameterSyntax)callerDocumentRoot.FindNode(
+                    callerParameterAndDocument.parameter.Locations.Single().SourceSpan);
+
+                var newParameterType = callerDocument.Id == document.Id
+                    ? (TypeSyntax) SyntaxFactory.IdentifierName(newDelegateName)
+                    : qualifiedDelegateType;
+
+                var updatedCallerParameterSyntax = callerParameterSyntax.WithType(newParameterType);
+
+                var updatedCallerDocumentRoot = callerDocumentRoot
+                    .ReplaceNode(callerParameterSyntax, updatedCallerParameterSyntax);
+
+                solution = solution.WithDocumentSyntaxRoot(callerDocument.Id, updatedCallerDocumentRoot);
+            }
+
+
+            return solution;
         }
 
         private async Task<ImmutableArray<(IParameterSymbol parameter, Document document)>> FindSourceParameters(
             IParameterSymbol parameterSymbol, Solution solution)
         {
-            var containingMethod = (IMethodSymbol) parameterSymbol.ContainingSymbol;
+            var containingMethod = (IMethodSymbol)parameterSymbol.ContainingSymbol;
 
             var referencesToMethod = await SymbolFinder.FindCallersAsync(containingMethod, solution);
 
@@ -119,25 +169,30 @@ namespace CreateCustomDelegateCodeRefactoring
 
                     var node = root.FindNode(x.SourceSpan);
 
-                    if(node is InvocationExpressionSyntax invocation)
+                    InvocationExpressionSyntax invocation;
+
+                    if (node.Parent is InvocationExpressionSyntax inv)
                     {
-                        return (invocation, document);
+                        invocation = inv;
+                    }
+                    else
+                    {
+                        invocation = (InvocationExpressionSyntax)node.Parent.Parent;
                     }
 
-                    return default;
+                    return (invocation, document);
                 })
-                .Where(x => x.invocation != null)
                 .ToImmutableArray();
 
             var result = new List<(IParameterSymbol parameter, Document document)>();
 
-            foreach(var invocationAndDocument in invocations)
+            foreach (var invocationAndDocument in invocations)
             {
                 var argument = invocationAndDocument.invocation.ArgumentList.Arguments[parameterSymbol.Ordinal];
 
                 var semanticModel = await invocationAndDocument.document.GetSemanticModelAsync();
 
-                if(semanticModel.GetSymbolInfo(argument).Symbol is IParameterSymbol parameter)
+                if (semanticModel.GetSymbolInfo(argument.Expression).Symbol is IParameterSymbol parameter)
                 {
                     result.Add((parameter, invocationAndDocument.document));
                 }
@@ -207,7 +262,7 @@ namespace CreateCustomDelegateCodeRefactoring
 
             var fullName = GetFullname(delegateTypeSymbol);
 
-            if(fullName == "System.Action")
+            if (fullName == "System.Action")
             {
                 //Action<string>
 
@@ -217,7 +272,7 @@ namespace CreateCustomDelegateCodeRefactoring
 
                 return new FuncOrAction.Action(parameters);
             }
-            else if(fullName == "System.Func")
+            else if (fullName == "System.Func")
             {
                 //Func<string /*p1*/, int>
 
