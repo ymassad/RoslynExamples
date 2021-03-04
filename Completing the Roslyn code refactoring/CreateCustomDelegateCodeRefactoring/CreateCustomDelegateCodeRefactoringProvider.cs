@@ -104,7 +104,9 @@ namespace CreateCustomDelegateCodeRefactoring
                             indexOfMethodWithinSiblingMembers,
                             delegateDeclaration);
 
-                        return possibleChangedContainingType.WithMembers(SyntaxFactory.List(newMembers));
+                        return possibleChangedContainingType
+                            .WithMembers(SyntaxFactory.List(newMembers))
+                            .NormalizeWhitespace();
                     }
 
                     throw new System.Exception("Unexpected: originalNode is not any of the nodes passed to ReplaceNodes");
