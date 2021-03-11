@@ -20,7 +20,6 @@ namespace TestingProject
         {
             var code = @"
 using System;
-
 public static class Class1
 {
     public static void Method1(Action<string /*firstName*/> write)
@@ -30,11 +29,9 @@ public static class Class1
 }";
             var expectedUpdatedCode = @"
 using System;
-
 public static class Class1
 {
     public delegate void Write(string firstName);
-
     public static void Method1(Write write)
     {
         write(""Adam"");
@@ -51,7 +48,6 @@ public static class Class1
         {
             var code = @"
 using System;
-
 public static class Class1
 {
     public static void Method1(Action<string /*firstName*/> write)
@@ -62,7 +58,6 @@ public static class Class1
 
             var callerCode = @"
 using System;
-
 public static class CallerClass1
 {
     public static void Method2(Action<string /*firstName*/> write)
@@ -74,11 +69,9 @@ public static class CallerClass1
 
             var expectedUpdatedCode = @"
 using System;
-
 public static class Class1
 {
     public delegate void Write(string firstName);
-
     public static void Method1(Write write)
     {
         write(""Adam"");
@@ -87,7 +80,6 @@ public static class Class1
 
             var expectedCallerCode = @"
 using System;
-
 public static class CallerClass1
 {
     public static void Method2(Class1.Write write)
@@ -108,7 +100,6 @@ public static class CallerClass1
         {
             var code = @"
 using System;
-
 public static class Class1
 {
     public static void Method1(Action<string /*firstName*/> write)
@@ -124,7 +115,6 @@ public static class Class1
 
             var callerCode = @"
 using System;
-
 public static class CallerClass1
 {
     public static void Method2(Action<string /*firstName*/> write)
@@ -136,11 +126,9 @@ public static class CallerClass1
 
             var expectedUpdatedCode = @"
 using System;
-
 public static class Class1
 {
     public delegate void Write(string firstName);
-
     public static void Method1(Write write)
     {
         write(""Adam"");
@@ -154,7 +142,6 @@ public static class Class1
 
             var expectedCallerCode = @"
 using System;
-
 public static class CallerClass1
 {
     public static void Method2(Class1.Write write)
