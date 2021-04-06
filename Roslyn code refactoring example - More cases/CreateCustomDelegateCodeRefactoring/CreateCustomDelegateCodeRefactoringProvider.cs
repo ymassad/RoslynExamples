@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Editing;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Operations;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
@@ -190,9 +191,15 @@ namespace CreateCustomDelegateCodeRefactoring
 
             foreach (var invocationAndDocument in invocations)
             {
-                var argument = invocationAndDocument.invocation.ArgumentList.Arguments[parameterSymbol.Ordinal];
-
                 var semanticModel = await invocationAndDocument.document.GetSemanticModelAsync();
+
+                var operation = semanticModel.GetOperation(invocationAndDocument.invocation);
+
+                if (!(operation is IInvocationOperation invocationOperation))
+                    continue;
+
+                var argument = (ArgumentSyntax) invocationOperation.Arguments
+                    .First(a => a.Parameter.Ordinal == parameterSymbol.Ordinal).Syntax;
 
                 if (semanticModel.GetSymbolInfo(argument.Expression).Symbol is IParameterSymbol parameter)
                 {

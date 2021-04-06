@@ -157,6 +157,110 @@ public static class CallerClass1
             Assert.AreEqual(expectedCallerCode, actualUpdatedCallerDocumentText);
         }
 
+        [TestMethod]
+        public async Task TestThatWeHandleNamedArguments_SameOrder()
+        {
+            var code = @"
+using System;
+public static class Class1
+{
+    public static void Method1(Action<string /*firstName*/> write, int param1)
+    {
+        write(""Adam"" + param1);
+    }
+}";
+
+            var callerCode = @"
+using System;
+public static class CallerClass1
+{
+    public static void Method2(Action<string /*firstName*/> write)
+    {
+        Class1.Method1(write: write, param1: 3);
+    }
+}
+";
+
+            var expectedUpdatedCode = @"
+using System;
+public static class Class1
+{
+    public delegate void Write(string firstName);
+    public static void Method1(Write write, int param1)
+    {
+        write(""Adam"" + param1);
+    }
+}";
+
+            var expectedCallerCode = @"
+using System;
+public static class CallerClass1
+{
+    public static void Method2(Class1.Write write)
+    {
+        Class1.Method1(write: write, param1: 3);
+    }
+}
+";
+
+            var (actualUpdatedText, actualUpdatedCallerDocumentText) = await ApplyCodeRefactoring(code, callerCode);
+
+            Assert.AreEqual(expectedUpdatedCode, actualUpdatedText);
+            Assert.AreEqual(expectedCallerCode, actualUpdatedCallerDocumentText);
+        }
+
+        [TestMethod]
+        public async Task TestThatWeHandleNamedArguments_DifferentOrder()
+        {
+            var code = @"
+using System;
+public static class Class1
+{
+    public static void Method1(Action<string /*firstName*/> write, int param1)
+    {
+        write(""Adam"" + param1);
+    }
+}";
+
+            var callerCode = @"
+using System;
+public static class CallerClass1
+{
+    public static void Method2(Action<string /*firstName*/> write)
+    {
+        Class1.Method1(param1: 3, write: write);
+    }
+}
+";
+
+            var expectedUpdatedCode = @"
+using System;
+public static class Class1
+{
+    public delegate void Write(string firstName);
+    public static void Method1(Write write, int param1)
+    {
+        write(""Adam"" + param1);
+    }
+}";
+
+            var expectedCallerCode = @"
+using System;
+public static class CallerClass1
+{
+    public static void Method2(Class1.Write write)
+    {
+        Class1.Method1(param1: 3, write: write);
+    }
+}
+";
+
+            var (actualUpdatedText, actualUpdatedCallerDocumentText) = await ApplyCodeRefactoring(code, callerCode);
+
+            Assert.AreEqual(expectedUpdatedCode, actualUpdatedText);
+            Assert.AreEqual(expectedCallerCode, actualUpdatedCallerDocumentText);
+        }
+
 
         private static async Task<string> ApplyCodeRefactoring(
             string code)
