@@ -57,6 +57,20 @@ namespace CreateCustomDelegateCodeRefactoring
             IParameterSymbol parameterSymbol,
             SemanticModel semanticModel)
         {
+            var allChanges = new Dictionary<DocumentId, ChangesForDocument>();
+
+            void AddChange(DocumentId documentId, Change change)
+            {
+                if(allChanges.TryGetValue(documentId, out var changes))
+                {
+                    allChanges[documentId] = changes.Add(change);
+                }
+                else
+                {
+                    allChanges[documentId] = new ChangesForDocument(documentId, ImmutableArray.Create(change));
+                }
+            }
+
             CreateDelegateDeclaration(
                 document,
                 funcOrAction,
@@ -66,17 +80,37 @@ namespace CreateCustomDelegateCodeRefactoring
 
             var method = (MethodDeclarationSyntax)parameterSyntax.Parent.Parent;
 
+            var containingType = (TypeDeclarationSyntax)method.Parent;
+
+            var indexOfMethodWithinSiblingMembers = containingType.Members.IndexOf(method);
+
+            var changeToAddDelegate = new Change(containingType, x =>
+            {
+                var possibleChangedContainingType = (TypeDeclarationSyntax)x;
+
+                var newMembers = possibleChangedContainingType.Members.Insert(
+                    indexOfMethodWithinSiblingMembers,
+                    delegateDeclaration);
+
+                return possibleChangedContainingType
+                    .WithMembers(SyntaxFactory.List(newMembers))
+                    .NormalizeWhitespace();
+            });
+
+            AddChange(document.Id, changeToAddDelegate);
+
             var annotationForParameter = new SyntaxAnnotation();
 
-            var updatedMethod = method.ReplaceNode(parameterSyntax,
-                parameterSyntax
+            var changeToParameter = new Change(parameterSyntax, x =>
+            {
+                var potentiallyChangedParameter = (ParameterSyntax)x;
+
+                return potentiallyChangedParameter
                     .WithType(
-                        SyntaxFactory.IdentifierName(newDelegateName))
-                    .WithAdditionalAnnotations(annotationForParameter));
+                        SyntaxFactory.IdentifierName(newDelegateName));
+            });
 
-            var root = await document.GetSyntaxRootAsync();
-
-            var containingType = (TypeDeclarationSyntax)method.Parent;
+            AddChange(document.Id, changeToParameter);
 
             var containingTypeSymbol = semanticModel.GetDeclaredSymbol(containingType);
 
@@ -86,49 +120,9 @@ namespace CreateCustomDelegateCodeRefactoring
                 (NameSyntax)syntaxGenerator.TypeExpression(containingTypeSymbol),
                 SyntaxFactory.IdentifierName(newDelegateName));
 
-            var indexOfMethodWithinSiblingMembers = containingType.Members.IndexOf(method);
-
-            var solution = document.Project.Solution;
-
-            var updatedRoot = root.ReplaceNodes(new SyntaxNode[] { method, containingType },
-                (originalNode, possiblyChangedNode) =>
-                {
-                    if (originalNode == method)
-                    {
-                        return updatedMethod;
-                    }
-                    else if (originalNode == containingType)
-                    {
-                        var possibleChangedContainingType = (TypeDeclarationSyntax)possiblyChangedNode;
-
-                        var newMembers = possibleChangedContainingType.Members.Insert(
-                            indexOfMethodWithinSiblingMembers,
-                            delegateDeclaration);
-
-                        return possibleChangedContainingType
-                            .WithMembers(SyntaxFactory.List(newMembers))
-                            .NormalizeWhitespace();
-                    }
-
-                    throw new System.Exception("Unexpected: originalNode is not any of the nodes passed to ReplaceNodes");
-                });
-
-            solution = solution.WithDocumentSyntaxRoot(document.Id, updatedRoot);
-
-            var newDocument = solution.GetDocument(document.Id);
-
-            var newSemanticModel = await newDocument.GetSemanticModelAsync();
-
-            var newDocumentRootNode = await newDocument.GetSyntaxRootAsync();
-
-            var newParameterSyntax =
-                (ParameterSyntax) newDocumentRootNode.GetAnnotatedNodes(annotationForParameter).Single();
-
-            var newParameterSymbol = newSemanticModel.GetDeclaredSymbol(newParameterSyntax);
-
             var parametersThatAreSourcesOfParameter = await FindSourceParameters(
-                newParameterSymbol,
-                solution);
+                parameterSymbol,
+                document.Project.Solution);
 
             foreach (var callerParameterAndDocument in parametersThatAreSourcesOfParameter)
             {
@@ -143,16 +137,18 @@ namespace CreateCustomDelegateCodeRefactoring
                     ? (TypeSyntax) SyntaxFactory.IdentifierName(newDelegateName)
                     : qualifiedDelegateType;
 
-                var updatedCallerParameterSyntax = callerParameterSyntax.WithType(newParameterType);
+                var change = new Change(callerParameterSyntax, x =>
+                {
+                    var potentiallyChangedParameterSyntax = (ParameterSyntax)x;
+                    return potentiallyChangedParameterSyntax.WithType(newParameterType);
+                });
 
-                var updatedCallerDocumentRoot = callerDocumentRoot
-                    .ReplaceNode(callerParameterSyntax, updatedCallerParameterSyntax);
-
-                solution = solution.WithDocumentSyntaxRoot(callerDocument.Id, updatedCallerDocumentRoot);
+                AddChange(callerDocument.Id, change);
             }
 
+            var changes = allChanges.Values.ToImmutableArray();
 
-            return solution;
+            return await ApplyChanges(document.Project.Solution, changes);
         }
 
         private async Task<ImmutableArray<(IParameterSymbol parameter, Document document)>> FindSourceParameters(
@@ -339,6 +335,68 @@ namespace CreateCustomDelegateCodeRefactoring
                 return ns.Name;
 
             return GetFullname(ns.ContainingNamespace) + "." + ns.Name;
+        }
+
+        public static async Task<Solution> ApplyChanges(Solution solution, ImmutableArray<ChangesForDocument> changesForDocuments)
+        {
+            foreach(var changeForDocument in changesForDocuments)
+            {
+                var document = solution.GetDocument(changeForDocument.DocumentId);
+
+                var rootNode = await document.GetSyntaxRootAsync();
+
+                var changes = changeForDocument.Changes;
+
+                var updatedRootNode = rootNode.ReplaceNodes(
+                    changes.Select(x => x.Node),
+                    (orgNode, potentiallyChangedNode) =>
+                {
+                    var change = changes.First(x => ReferenceEquals(x.Node, orgNode));
+
+                    var updatedNode = change.UpdateSyntaxNode(potentiallyChangedNode);
+
+                    return updatedNode;
+                });
+
+                solution = solution.WithDocumentSyntaxRoot(changeForDocument.DocumentId, updatedRootNode);
+            }
+
+            return solution;
+
+        }
+    }
+
+    public delegate SyntaxNode UpdateSyntaxNode(SyntaxNode potentiallyChangedNode);
+
+    public sealed class Change
+    {
+        public SyntaxNode Node { get; }
+
+        public UpdateSyntaxNode UpdateSyntaxNode { get; }
+
+        public Change(SyntaxNode node, UpdateSyntaxNode updateSyntaxNode)
+        {
+            Node = node;
+            UpdateSyntaxNode = updateSyntaxNode;
+        }
+    }
+
+
+    public sealed class ChangesForDocument
+    {
+        public ChangesForDocument(DocumentId documentId, ImmutableArray<Change> changes)
+        {
+            DocumentId = documentId;
+            Changes = changes;
+        }
+
+        public DocumentId DocumentId { get; }
+
+        public ImmutableArray<Change> Changes { get; }
+
+        public ChangesForDocument Add(Change change)
+        {
+            return new ChangesForDocument(DocumentId, Changes.Add(change));
         }
     }
 }
